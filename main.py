@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -18,13 +18,16 @@ async def main() -> None:
     dispatcher = Dispatcher()
     dispatcher.include_router(start_router)
 
-    logging.info("BookFerry Bot Р·Р°РїСѓС‰РµРЅ")
+    logging.info("BookFerry Bot запущен")
 
-    await dispatcher.start_polling(bot)
+    try:
+        await dispatcher.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("BookFerry Bot РѕСЃС‚Р°РЅРѕРІР»РµРЅ")
+        logging.info("BookFerry Bot остановлен")

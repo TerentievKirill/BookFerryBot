@@ -1,10 +1,16 @@
-﻿import os
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 
-load_dotenv()
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+load_dotenv(
+    dotenv_path=ENV_FILE,
+    encoding="utf-8-sig",
+)
 
 
 @dataclass(frozen=True)
@@ -17,8 +23,7 @@ def load_settings() -> Settings:
 
     if not bot_token:
         raise RuntimeError(
-            "РќРµ Р·Р°РґР°РЅ BOT_TOKEN. "
-            "Р”РѕР±Р°РІСЊС‚Рµ С‚РѕРєРµРЅ Telegram-Р±РѕС‚Р° РІ С„Р°Р№Р» .env"
+            f"Не задан BOT_TOKEN в файле {ENV_FILE}"
         )
 
     return Settings(bot_token=bot_token)

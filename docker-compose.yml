@@ -1,4 +1,4 @@
-﻿services:
+services:
   bookferry-bot:
     build: .
     container_name: bookferry-bot

@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 
 from aiogram import Router
 from aiogram.filters import CommandStart
@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 
 router = Router(name="start")
-
 logger = logging.getLogger(__name__)
 
 
@@ -16,17 +15,17 @@ async def handle_start(message: Message) -> None:
 
     if user is not None:
         logger.info(
-            "РџРѕР»СѓС‡РµРЅР° РєРѕРјР°РЅРґР° /start: telegram_id=%s, username=%s",
+            "Получена команда /start: telegram_id=%s, username=%s",
             user.id,
             user.username,
         )
         user_name = user.first_name
     else:
-        user_name = "С‡РёС‚Р°С‚РµР»СЊ"
+        user_name = "читатель"
 
     await message.answer(
-        f"РџСЂРёРІРµС‚, {user_name}! рџ‘‹\n\n"
-        "РЇ BookFerry вЂ” РїРѕРјРѕРіСѓ РЅР°Р№С‚Рё РєРЅРёРіСѓ Рё РѕС‚РїСЂР°РІРёС‚СЊ РµС‘ "
-        "РЅР° СЌР»РµРєС‚СЂРѕРЅРЅСѓСЋ РєРЅРёРіСѓ.\n\n"
-        "Р‘РѕС‚ Р·Р°РїСѓС‰РµРЅ Рё РіРѕС‚РѕРІ Рє РЅР°СЃС‚СЂРѕР№РєРµ."
+        f"Привет, {user_name}! 👋\n\n"
+        "Я BookFerry — помогу найти книгу и отправить её "
+        "на электронную книгу.\n\n"
+        "Бот запущен и готов к настройке."
     )

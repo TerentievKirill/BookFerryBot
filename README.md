@@ -1,35 +1,31 @@
-﻿# BookFerry Bot
+# BookFerry Bot
 
-Telegram-РёРЅС‚РµСЂС„РµР№СЃ РґР»СЏ BookFerry Server.
+Telegram-интерфейс для BookFerry Server.
 
-## Р›РѕРєР°Р»СЊРЅС‹Р№ Р·Р°РїСѓСЃРє
+## Локальный запуск
 
-1. РЎРѕР·РґР°С‚СЊ РІРёСЂС‚СѓР°Р»СЊРЅРѕРµ РѕРєСЂСѓР¶РµРЅРёРµ:
+1. Создать виртуальное окружение:
 
    python -m venv .venv
 
-2. РђРєС‚РёРІРёСЂРѕРІР°С‚СЊ:
+2. Активировать:
 
    .\.venv\Scripts\Activate.ps1
 
-3. РЈСЃС‚Р°РЅРѕРІРёС‚СЊ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё:
+3. Установить зависимости:
 
    pip install -r requirements.txt
 
-4. РЎРєРѕРїРёСЂРѕРІР°С‚СЊ РЅР°СЃС‚СЂРѕР№РєРё:
+4. Создать `.env` и указать `BOT_TOKEN`.
 
-   Copy-Item .env.example .env
-
-5. Р’СЃС‚Р°РІРёС‚СЊ BOT_TOKEN РІ `.env`.
-
-6. Р—Р°РїСѓСЃС‚РёС‚СЊ:
+5. Запустить:
 
    python main.py
 
-## Р—Р°РїСѓСЃРє РІ Docker
+## Запуск в Docker
 
 docker compose up -d --build
 
-Р›РѕРіРё:
+Логи:
 
 docker compose logs -f
