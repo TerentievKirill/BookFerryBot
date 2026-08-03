@@ -1,0 +1,7 @@
+﻿services:
+  bookferry-bot:
+    build: .
+    container_name: bookferry-bot
+    restart: unless-stopped
+    env_file:
+      - .env
