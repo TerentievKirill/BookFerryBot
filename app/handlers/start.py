@@ -3,7 +3,7 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 
 from app.api_client import (
     BookFerryApiError,
@@ -69,15 +69,7 @@ async def handle_start(
         return
 
     await message.answer(
-        f"С возвращением, {user.first_name}! 👋",
-        reply_markup=main_keyboard,
-    )
-
-
-@router.message(F.text == "🔎 Найти книгу")
-async def handle_search_button(
-    message: Message,
-) -> None:
-    await message.answer(
-        "Поиск книг добавим следующим шагом."
+        f"С возвращением, {user.first_name}! 👋\n\n"
+        "Просто отправьте название книги.",
+        reply_markup=ReplyKeyboardRemove(),
     )
