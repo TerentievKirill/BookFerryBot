@@ -118,7 +118,7 @@ async def search_books(
     telegram_id: int,
     query: str,
 ) -> list[dict]:
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=180) as client:
         try:
             response = await client.post(
                 f"{settings.api_base_url}/search",
