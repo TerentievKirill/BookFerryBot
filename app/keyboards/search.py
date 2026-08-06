@@ -10,9 +10,13 @@ PAGE_SIZE = 20
 def build_search_keyboard(
     books: list[dict],
     page: int,
+    has_more: bool,
 ) -> InlineKeyboardMarkup:
     start = page * PAGE_SIZE
-    end = min(start + PAGE_SIZE, len(books))
+    end = min(
+        start + PAGE_SIZE,
+        len(books),
+    )
 
     rows = []
 
@@ -48,7 +52,7 @@ def build_search_keyboard(
             )
         )
 
-    if end < len(books):
+    if end < len(books) or has_more:
         navigation.append(
             InlineKeyboardButton(
                 text="Далее →",

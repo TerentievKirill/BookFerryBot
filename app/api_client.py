@@ -1,6 +1,7 @@
 from email.message import Message as EmailMessage
 
 import httpx
+
 from app.config import settings
 
 
@@ -17,7 +18,9 @@ async def get_telegram_user(
     )
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(
+            timeout=10.0
+        ) as client:
             response = await client.get(url)
     except httpx.RequestError as error:
         raise BookFerryApiError(
@@ -31,7 +34,8 @@ async def get_telegram_user(
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
         raise BookFerryApiError(
-            f"Сервер вернул ошибку {response.status_code}"
+            f"Сервер вернул ошибку "
+            f"{response.status_code}"
         ) from error
 
     return response.json()
@@ -87,7 +91,9 @@ async def _patch_user_setting(
     )
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(
+            timeout=10.0
+        ) as client:
             response = await client.patch(
                 url,
                 json=payload,
@@ -101,31 +107,32 @@ async def _patch_user_setting(
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
         raise BookFerryApiError(
-            f"Сервер вернул ошибку {response.status_code}: "
+            f"Сервер вернул ошибку "
+            f"{response.status_code}: "
             f"{response.text}"
         ) from error
-from email.message import Message as EmailMessage
 
-import httpx
-
-from app.config import settings
-
-
-class BookFerryApiError(Exception):
-    pass
 
 async def search_books(
     telegram_id: int,
     query: str,
-) -> list[dict]:
-    async with httpx.AsyncClient(timeout=180) as client:
+    page_url: str | None = None,
+) -> dict:
+    payload = {
+        "telegram_id": telegram_id,
+        "query": query,
+    }
+
+    if page_url:
+        payload["page_url"] = page_url
+
+    async with httpx.AsyncClient(
+        timeout=180
+    ) as client:
         try:
             response = await client.post(
                 f"{settings.api_base_url}/search",
-                json={
-                    "telegram_id": telegram_id,
-                    "query": query,
-                },
+                json=payload,
             )
         except httpx.RequestError as error:
             raise BookFerryApiError(
@@ -139,11 +146,22 @@ async def search_books(
 
     if response.is_error:
         raise BookFerryApiError(
-            f"Ошибка поиска: {response.status_code}\n"
+            f"Ошибка поиска: "
+            f"{response.status_code}\n"
             f"{response.text}"
         )
 
-    return response.json()
+    data = response.json()
+
+    # Позволяет сначала обновить бот,
+    # а затем сервер.
+    if isinstance(data, list):
+        return {
+            "books": data,
+            "next_page_url": None,
+        }
+
+    return data
 
 
 async def download_book(
@@ -155,7 +173,9 @@ async def download_book(
         connect=10,
     )
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout
+    ) as client:
         try:
             response = await client.post(
                 f"{settings.api_base_url}/send-book",
@@ -171,7 +191,8 @@ async def download_book(
 
     if response.is_error:
         raise BookFerryApiError(
-            f"Ошибка скачивания: {response.status_code}\n"
+            f"Ошибка скачивания: "
+            f"{response.status_code}\n"
             f"{response.text}"
         )
 
@@ -185,7 +206,9 @@ async def download_book(
         )
 
     header = EmailMessage()
-    header["content-disposition"] = content_disposition
+    header["content-disposition"] = (
+        content_disposition
+    )
 
     filename = header.get_filename()
 

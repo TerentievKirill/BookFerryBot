@@ -27,15 +27,56 @@ logger = logging.getLogger(__name__)
 def build_page_text(
     books_count: int,
     page: int,
+    has_more: bool,
 ) -> str:
-    pages_count = (
-        books_count + PAGE_SIZE - 1
-    ) // PAGE_SIZE
+    pages_count = max(
+        1,
+        (
+            books_count
+            + PAGE_SIZE
+            - 1
+        ) // PAGE_SIZE,
+    )
+
+    found_text = (
+        f"{books_count}+"
+        if has_more
+        else str(books_count)
+    )
+
+    pages_text = (
+        f"{pages_count}+"
+        if has_more
+        else str(pages_count)
+    )
 
     return (
-        f"Найдено книг: {books_count}\n"
-        f"Страница {page + 1} из {pages_count}\n\n"
+        f"Найдено книг: {found_text}\n"
+        f"Страница {page + 1} "
+        f"из {pages_text}\n\n"
         "Нажмите на нужную книгу."
+    )
+
+
+async def show_search_page(
+    message: Message,
+    books: list[dict],
+    page: int,
+    next_page_url: str | None,
+) -> None:
+    has_more = next_page_url is not None
+
+    await message.edit_text(
+        build_page_text(
+            books_count=len(books),
+            page=page,
+            has_more=has_more,
+        ),
+        reply_markup=build_search_keyboard(
+            books=books,
+            page=page,
+            has_more=has_more,
+        ),
     )
 
 
@@ -63,7 +104,7 @@ async def handle_search(
     )
 
     try:
-        books = await search_books(
+        result = await search_books(
             telegram_id=user.id,
             query=query,
         )
@@ -75,25 +116,29 @@ async def handle_search(
         )
         return
 
+    books = result["books"]
+    next_page_url = result.get(
+        "next_page_url"
+    )
+
     if not books:
         await status_message.edit_text(
-            f"По запросу «{query}» ничего не найдено."
+            f"По запросу «{query}» "
+            "ничего не найдено."
         )
         return
 
     await state.update_data(
+        query=query,
         books=books,
+        next_page_url=next_page_url,
     )
 
-    await status_message.edit_text(
-        build_page_text(
-            books_count=len(books),
-            page=0,
-        ),
-        reply_markup=build_search_keyboard(
-            books=books,
-            page=0,
-        ),
+    await show_search_page(
+        message=status_message,
+        books=books,
+        page=0,
+        next_page_url=next_page_url,
     )
 
 
@@ -110,26 +155,108 @@ async def handle_page(
         return
 
     data = await state.get_data()
-    books = data.get("books")
 
-    if not books:
+    query = data.get("query")
+    books = data.get("books")
+    next_page_url = data.get(
+        "next_page_url"
+    )
+
+    if not query or not books:
         await callback.message.answer(
             "Результаты поиска устарели. "
             "Введите название ещё раз."
         )
         return
 
-    page = int(callback.data.split(":")[1])
+    try:
+        page = int(
+            callback.data.split(":")[1]
+        )
+    except (IndexError, ValueError):
+        return
 
-    await callback.message.edit_text(
-        build_page_text(
-            books_count=len(books),
-            page=page,
-        ),
-        reply_markup=build_search_keyboard(
+    required_end = (
+        page + 1
+    ) * PAGE_SIZE
+
+    while (
+        len(books) < required_end
+        and next_page_url
+    ):
+        current_page_url = next_page_url
+
+        try:
+            result = await search_books(
+                telegram_id=callback.from_user.id,
+                query=query,
+                page_url=current_page_url,
+            )
+        except BookFerryApiError as error:
+            logger.exception(
+                "Ошибка загрузки следующей страницы"
+            )
+
+            await callback.message.answer(
+                str(error)
+            )
+            return
+
+        new_books = result["books"]
+        new_next_page_url = result.get(
+            "next_page_url"
+        )
+
+        books.extend(new_books)
+
+        if (
+            new_next_page_url
+            == current_page_url
+        ):
+            next_page_url = None
+        else:
+            next_page_url = (
+                new_next_page_url
+            )
+
+        if (
+            not new_books
+            and not next_page_url
+        ):
+            break
+
+    await state.update_data(
+        books=books,
+        next_page_url=next_page_url,
+    )
+
+    start = page * PAGE_SIZE
+
+    if start >= len(books):
+        last_page = max(
+            0,
+            (
+                len(books) - 1
+            ) // PAGE_SIZE,
+        )
+
+        await show_search_page(
+            message=callback.message,
             books=books,
-            page=page,
-        ),
+            page=last_page,
+            next_page_url=None,
+        )
+
+        await callback.message.answer(
+            "Больше книг нет."
+        )
+        return
+
+    await show_search_page(
+        message=callback.message,
+        books=books,
+        page=page,
+        next_page_url=next_page_url,
     )
 
 
@@ -158,19 +285,27 @@ async def handle_book(
         return
 
     try:
-        index = int(callback.data.split(":")[1])
+        index = int(
+            callback.data.split(":")[1]
+        )
         book = books[index]
     except (IndexError, ValueError):
         await callback.bot.send_message(
             chat_id=callback.from_user.id,
-            text="Не удалось определить книгу.",
+            text=(
+                "Не удалось определить книгу."
+            ),
         )
         return
 
     try:
-        file_content, filename = await download_book(
-            telegram_id=callback.from_user.id,
-            url=book["url"],
+        file_content, filename = (
+            await download_book(
+                telegram_id=(
+                    callback.from_user.id
+                ),
+                url=book["url"],
+            )
         )
     except BookFerryApiError as error:
         logger.exception(
@@ -192,7 +327,9 @@ async def handle_book(
         chat_id=callback.from_user.id,
         document=document,
         caption=(
-            f"{book['title']} — {book['author']}\n\n"
-            "Книга также отправлена на email ✅"
+            f"{book['title']} — "
+            f"{book['author']}\n\n"
+            "Книга также отправлена "
+            "на email ✅"
         ),
     )
