@@ -9,15 +9,10 @@ from app.handlers.profile import (
     router as profile_router,
 )
 from app.handlers.search import router as search_router
-from app.handlers.settings import (
-    router as settings_router,
-)
-from app.handlers.start import (
-    router as start_router,
-)
-from app.handlers.about import (
-    router as about_router,
-)
+from app.handlers.settings import router as settings_router
+from app.handlers.start import router as start_router
+from app.handlers.about import router as about_router
+from app.handlers.help import router as help_router
 
 async def main() -> None:
     logging.basicConfig(
