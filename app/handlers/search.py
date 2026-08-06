@@ -15,7 +15,6 @@ from app.api_client import (
     search_books,
 )
 from app.keyboards.search import (
-    PAGE_SIZE,
     build_search_keyboard,
 )
 
@@ -27,33 +26,10 @@ logger = logging.getLogger(__name__)
 def build_page_text(
     books_count: int,
     page: int,
-    has_more: bool,
 ) -> str:
-    pages_count = max(
-        1,
-        (
-            books_count
-            + PAGE_SIZE
-            - 1
-        ) // PAGE_SIZE,
-    )
-
-    found_text = (
-        f"{books_count}+"
-        if has_more
-        else str(books_count)
-    )
-
-    pages_text = (
-        f"{pages_count}+"
-        if has_more
-        else str(pages_count)
-    )
-
     return (
-        f"Найдено книг: {found_text}\n"
-        f"Страница {page + 1} "
-        f"из {pages_text}\n\n"
+        f"Книг на странице: {books_count}\n"
+        f"Страница {page + 1}\n\n"
         "Нажмите на нужную книгу."
     )
 
@@ -62,15 +38,12 @@ async def show_search_page(
     message: Message,
     books: list[dict],
     page: int,
-    next_page_url: str | None,
+    has_more: bool,
 ) -> None:
-    has_more = next_page_url is not None
-
     await message.edit_text(
         build_page_text(
             books_count=len(books),
             page=page,
-            has_more=has_more,
         ),
         reply_markup=build_search_keyboard(
             books=books,
@@ -90,7 +63,6 @@ async def handle_search(
 ) -> None:
     query = message.text.strip()
 
-    # Команды не считаем названиями книг.
     if not query or query.startswith("/"):
         return
 
@@ -110,27 +82,24 @@ async def handle_search(
         )
     except BookFerryApiError as error:
         logger.exception("Ошибка поиска")
-
-        await status_message.edit_text(
-            str(error)
-        )
+        await status_message.edit_text(str(error))
         return
 
     books = result["books"]
-    next_page_url = result.get(
-        "next_page_url"
-    )
+    next_page_url = result.get("next_page_url")
 
     if not books:
         await status_message.edit_text(
-            f"По запросу «{query}» "
-            "ничего не найдено."
+            f"По запросу «{query}» ничего не найдено."
         )
         return
 
+    pages = [books]
+
     await state.update_data(
         query=query,
-        books=books,
+        pages=pages,
+        current_page=0,
         next_page_url=next_page_url,
     )
 
@@ -138,7 +107,7 @@ async def handle_search(
         message=status_message,
         books=books,
         page=0,
-        next_page_url=next_page_url,
+        has_more=next_page_url is not None,
     )
 
 
@@ -157,12 +126,10 @@ async def handle_page(
     data = await state.get_data()
 
     query = data.get("query")
-    books = data.get("books")
-    next_page_url = data.get(
-        "next_page_url"
-    )
+    pages = data.get("pages")
+    next_page_url = data.get("next_page_url")
 
-    if not query or not books:
+    if not query or not pages:
         await callback.message.answer(
             "Результаты поиска устарели. "
             "Введите название ещё раз."
@@ -170,20 +137,17 @@ async def handle_page(
         return
 
     try:
-        page = int(
-            callback.data.split(":")[1]
-        )
+        page = int(callback.data.split(":")[1])
     except (IndexError, ValueError):
         return
 
-    required_end = (
-        page + 1
-    ) * PAGE_SIZE
+    if page < 0:
+        return
 
-    while (
-        len(books) < required_end
-        and next_page_url
-    ):
+    if page < len(pages):
+        page_books = pages[page]
+
+    elif page == len(pages) and next_page_url:
         current_page_url = next_page_url
 
         try:
@@ -196,67 +160,41 @@ async def handle_page(
             logger.exception(
                 "Ошибка загрузки следующей страницы"
             )
-
-            await callback.message.answer(
-                str(error)
-            )
+            await callback.message.answer(str(error))
             return
 
-        new_books = result["books"]
-        new_next_page_url = result.get(
-            "next_page_url"
-        )
+        page_books = result["books"]
+        new_next_page_url = result.get("next_page_url")
 
-        books.extend(new_books)
-
-        if (
-            new_next_page_url
-            == current_page_url
-        ):
+        if new_next_page_url == current_page_url:
             next_page_url = None
         else:
-            next_page_url = (
-                new_next_page_url
-            )
+            next_page_url = new_next_page_url
 
-        if (
-            not new_books
-            and not next_page_url
-        ):
-            break
+        pages.append(page_books)
 
-    await state.update_data(
-        books=books,
-        next_page_url=next_page_url,
-    )
-
-    start = page * PAGE_SIZE
-
-    if start >= len(books):
-        last_page = max(
-            0,
-            (
-                len(books) - 1
-            ) // PAGE_SIZE,
-        )
-
-        await show_search_page(
-            message=callback.message,
-            books=books,
-            page=last_page,
-            next_page_url=None,
-        )
-
+    else:
         await callback.message.answer(
             "Больше книг нет."
         )
         return
 
+    has_more = (
+        page < len(pages) - 1
+        or next_page_url is not None
+    )
+
+    await state.update_data(
+        pages=pages,
+        current_page=page,
+        next_page_url=next_page_url,
+    )
+
     await show_search_page(
         message=callback.message,
-        books=books,
+        books=page_books,
         page=page,
-        next_page_url=next_page_url,
+        has_more=has_more,
     )
 
 
@@ -272,9 +210,11 @@ async def handle_book(
     )
 
     data = await state.get_data()
-    books = data.get("books")
 
-    if not books:
+    pages = data.get("pages")
+    current_page = data.get("current_page", 0)
+
+    if not pages or current_page >= len(pages):
         await callback.bot.send_message(
             chat_id=callback.from_user.id,
             text=(
@@ -284,28 +224,22 @@ async def handle_book(
         )
         return
 
+    books = pages[current_page]
+
     try:
-        index = int(
-            callback.data.split(":")[1]
-        )
+        index = int(callback.data.split(":")[1])
         book = books[index]
     except (IndexError, ValueError):
         await callback.bot.send_message(
             chat_id=callback.from_user.id,
-            text=(
-                "Не удалось определить книгу."
-            ),
+            text="Не удалось определить книгу.",
         )
         return
 
     try:
-        file_content, filename = (
-            await download_book(
-                telegram_id=(
-                    callback.from_user.id
-                ),
-                url=book["url"],
-            )
+        file_content, filename = await download_book(
+            telegram_id=callback.from_user.id,
+            url=book["url"],
         )
     except BookFerryApiError as error:
         logger.exception(

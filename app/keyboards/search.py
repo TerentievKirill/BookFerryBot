@@ -4,32 +4,19 @@ from aiogram.types import (
 )
 
 
-PAGE_SIZE = 20
-
-
 def build_search_keyboard(
     books: list[dict],
     page: int,
     has_more: bool,
 ) -> InlineKeyboardMarkup:
-    start = page * PAGE_SIZE
-    end = min(
-        start + PAGE_SIZE,
-        len(books),
-    )
-
     rows = []
 
-    for index in range(start, end):
-        book = books[index]
-
+    for index, book in enumerate(books):
         title = book["title"]
         author = book["author"]
 
         label = f"{title} — {author}"
 
-        # Ограничиваем только текст кнопки.
-        # Название скачанного файла не меняется.
         if len(label) > 64:
             label = label[:61] + "..."
 
@@ -52,7 +39,7 @@ def build_search_keyboard(
             )
         )
 
-    if end < len(books) or has_more:
+    if has_more:
         navigation.append(
             InlineKeyboardButton(
                 text="Далее →",
