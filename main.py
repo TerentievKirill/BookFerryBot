@@ -4,15 +4,20 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from app.handlers.search import router as search_router
 from app.config import settings
+from app.handlers.profile import (
+    router as profile_router,
+)
+from app.handlers.search import router as search_router
 from app.handlers.settings import (
     router as settings_router,
 )
 from app.handlers.start import (
     router as start_router,
 )
-
+from app.handlers.about import (
+    router as about_router,
+)
 
 async def main() -> None:
     logging.basicConfig(
@@ -30,6 +35,9 @@ async def main() -> None:
     )
 
     dispatcher.include_router(start_router)
+    dispatcher.include_router(help_router)
+    dispatcher.include_router(about_router)
+    dispatcher.include_router(profile_router)
     dispatcher.include_router(settings_router)
     dispatcher.include_router(search_router)
 
