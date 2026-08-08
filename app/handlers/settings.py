@@ -80,14 +80,15 @@ def normalize_emails(value: str) -> tuple[str | None, str | None]:
 
 async def _ask_emails(message: Message) -> None:
     await message.answer(
-        "Теперь введите email электронной книги.\n\n"
-        "Несколько адресов можно указать через запятую.",
+        "Шаг 2 из 3 — email 📧\n\n"
+        "Введите email электронной книги.\n"
+        "Можно указать до пяти адресов через запятую.",
         reply_markup=ReplyKeyboardRemove(),
     )
 
 
+@router.message(Command("settings"))
 @router.message(Command("setting"))
-@router.message(F.text == "⚙️ Настройки")
 async def start_settings(
     message: Message,
     state: FSMContext,
@@ -103,14 +104,14 @@ async def start_settings(
     except BookFerryApiError as error:
         logger.exception("Не удалось получить каталоги")
         await message.answer(
-            f"Не удалось получить список каталогов.\n\n{error}",
+            f"Не удалось получить список библиотек.\n\n{error}",
             reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     if not catalogs:
         await message.answer(
-            "На сервере сейчас нет доступных каталогов.",
+            "Сейчас нет доступных библиотек.",
             reply_markup=ReplyKeyboardRemove(),
         )
         return
@@ -124,9 +125,10 @@ async def start_settings(
     await state.set_state(SettingsState.catalog)
 
     await message.answer(
-        "Выберите каталог.\n\n"
-        "Встроенные каталоги ищут по быстрому локальному индексу. "
-        "Если нужного каталога нет — выберите «Другой OPDS».",
+        "⚙️ Мастер настройки BookFerry\n\n"
+        "Шаг 1 из 3 — библиотека 📚\n\n"
+        "Выберите библиотеку для поиска. "
+        "Если нужной нет в списке, можно подключить свой OPDS.",
         reply_markup=build_catalogs_keyboard(catalogs),
     )
 
@@ -155,21 +157,21 @@ async def process_catalog(
         logger.exception("Не удалось сохранить каталог")
         if callback.message:
             await callback.message.answer(
-                f"Не удалось сохранить каталог.\n\n{error}"
+                f"Не удалось сохранить библиотеку.\n\n{error}"
             )
         return
 
     data = await state.get_data()
     catalog_name = data.get("catalog_names", {}).get(
         str(catalog_id),
-        "выбран",
+        "выбранная библиотека",
     )
 
     await state.set_state(SettingsState.emails)
 
     if callback.message:
         await callback.message.edit_text(
-            f"Каталог сохранён: {catalog_name} ✅"
+            f"✅ Библиотека: {catalog_name}"
         )
         await _ask_emails(callback.message)
 
@@ -187,10 +189,9 @@ async def process_custom_catalog(
 
     if callback.message:
         await callback.message.edit_text(
-            "Введите адрес своего OPDS-каталога.\n\n"
-            "BookFerry проверит адрес и наличие поиска.\n\n"
-            "Например:\n"
-            "https://example.org/opds"
+            "🌐 Другой OPDS\n\n"
+            "Отправьте адрес OPDS-каталога.\n"
+            "BookFerry проверит его перед сохранением."
         )
 
 
@@ -199,7 +200,7 @@ async def process_invalid_catalog(
     message: Message,
 ) -> None:
     await message.answer(
-        "Выберите каталог кнопкой выше или нажмите «Другой OPDS»."
+        "Выберите библиотеку кнопкой выше."
     )
 
 
@@ -219,13 +220,12 @@ async def process_opds(
 
     if not is_valid_opds_url(opds_url):
         await message.answer(
-            "Некорректный адрес OPDS-каталога.\n\n"
             "Адрес должен начинаться с http:// или https://"
         )
         return
 
     status_message = await message.answer(
-        "Проверяю OPDS-каталог..."
+        "Проверяю OPDS-каталог…"
     )
 
     try:
@@ -236,14 +236,14 @@ async def process_opds(
     except BookFerryApiError as error:
         logger.exception("Не удалось сохранить OPDS")
         await status_message.edit_text(
-            f"Не удалось подключить каталог.\n\n{error}"
+            f"Не удалось подключить OPDS-каталог.\n\n{error}"
         )
         return
 
     await state.set_state(SettingsState.emails)
 
     await status_message.edit_text(
-        "OPDS-каталог проверен и сохранён ✅"
+        "✅ Пользовательский OPDS подключён."
     )
     await _ask_emails(message)
 
@@ -292,7 +292,8 @@ async def process_emails(
     await state.set_state(SettingsState.subject)
 
     await message.answer(
-        "Email сохранён.\n\n"
+        "✅ Email сохранён.\n\n"
+        "Шаг 3 из 3 — тема письма ✉️\n\n"
         "Введите тему письма или нажмите «Пропустить».",
         reply_markup=skip_subject_keyboard,
     )
@@ -305,6 +306,19 @@ async def process_invalid_emails(
     await message.answer(
         "Отправьте email обычным текстом.\n"
         "Несколько адресов укажите через запятую."
+    )
+
+
+async def _finish_settings(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    await state.clear()
+    await message.answer(
+        "✅ Настройка завершена.\n\n"
+        "Теперь просто отправьте название или автора книги.\n"
+        "Быстро сменить библиотеку можно через Menu → «Сменить каталог».",
+        reply_markup=ReplyKeyboardRemove(),
     )
 
 
@@ -336,13 +350,7 @@ async def skip_subject(
         )
         return
 
-    await state.clear()
-
-    await message.answer(
-        "Настройка завершена ✅\n\n"
-        "Теперь просто отправьте название книги.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await _finish_settings(message, state)
 
 
 @router.message(SettingsState.subject, F.text)
@@ -378,13 +386,7 @@ async def process_subject(
         )
         return
 
-    await state.clear()
-
-    await message.answer(
-        "Настройка завершена ✅\n\n"
-        "Теперь просто отправьте название книги.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await _finish_settings(message, state)
 
 
 @router.message(SettingsState.subject)
