@@ -28,9 +28,9 @@ def build_page_text(
     page: int,
 ) -> str:
     return (
-        f"Книг на странице: {books_count}\n"
+        f"📚 Книг на странице: {books_count}\n"
         f"Страница {page + 1}\n\n"
-        "Нажмите на нужную книгу."
+        "Выберите нужную книгу:"
     )
 
 
@@ -72,7 +72,7 @@ async def handle_search(
         return
 
     status_message = await message.answer(
-        f"Ищу: {query}"
+        f"🔎 Ищу: {query}"
     )
 
     try:
@@ -90,7 +90,9 @@ async def handle_search(
 
     if not books:
         await status_message.edit_text(
-            f"По запросу «{query}» ничего не найдено."
+            f"По запросу «{query}» ничего не найдено.\n\n"
+            "Попробуйте другое название, автора или смените библиотеку "
+            "через Menu."
         )
         return
 
@@ -132,7 +134,7 @@ async def handle_page(
     if not query or not pages:
         await callback.message.answer(
             "Результаты поиска устарели. "
-            "Введите название ещё раз."
+            "Отправьте запрос ещё раз."
         )
         return
 
@@ -175,7 +177,7 @@ async def handle_page(
 
     else:
         await callback.message.answer(
-            "Больше книг нет."
+            "Больше результатов нет."
         )
         return
 
@@ -206,7 +208,7 @@ async def handle_book(
     state: FSMContext,
 ) -> None:
     await callback.answer(
-        "Скачиваю книгу..."
+        "Скачиваю EPUB…"
     )
 
     data = await state.get_data()
@@ -219,7 +221,7 @@ async def handle_book(
             chat_id=callback.from_user.id,
             text=(
                 "Результаты поиска устарели. "
-                "Введите название ещё раз."
+                "Отправьте запрос ещё раз."
             ),
         )
         return
@@ -232,7 +234,7 @@ async def handle_book(
     except (IndexError, ValueError):
         await callback.bot.send_message(
             chat_id=callback.from_user.id,
-            text="Не удалось определить книгу.",
+            text="Не удалось определить выбранную книгу.",
         )
         return
 
@@ -261,9 +263,7 @@ async def handle_book(
         chat_id=callback.from_user.id,
         document=document,
         caption=(
-            f"{book['title']} — "
-            f"{book['author']}\n\n"
-            "Книга также отправлена "
-            "на email ✅"
+            f"{book['title']} — {book['author']}\n\n"
+            "✅ EPUB также отправлен на настроенные email."
         ),
     )

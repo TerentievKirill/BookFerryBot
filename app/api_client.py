@@ -9,6 +9,18 @@ class BookFerryApiError(Exception):
     pass
 
 
+def _response_detail(response: httpx.Response) -> str:
+    try:
+        data = response.json()
+    except ValueError:
+        return response.text.strip() or f"HTTP {response.status_code}"
+
+    if isinstance(data, dict) and data.get("detail"):
+        return str(data["detail"])
+
+    return response.text.strip() or f"HTTP {response.status_code}"
+
+
 async def get_telegram_user(
     telegram_id: int,
 ) -> dict | None:
@@ -24,7 +36,7 @@ async def get_telegram_user(
             response = await client.get(url)
     except httpx.RequestError as error:
         raise BookFerryApiError(
-            "Не удалось подключиться к серверу"
+            "Не удалось подключиться к серверу BookFerry"
         ) from error
 
     if response.status_code == 404:
@@ -34,18 +46,61 @@ async def get_telegram_user(
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
         raise BookFerryApiError(
-            f"Сервер вернул ошибку "
-            f"{response.status_code}"
+            f"Сервер вернул ошибку: {_response_detail(response)}"
         ) from error
 
     return response.json()
 
 
+async def get_catalogs() -> list[dict]:
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0
+        ) as client:
+            response = await client.get(
+                f"{settings.api_base_url}/catalogs"
+            )
+    except httpx.RequestError as error:
+        raise BookFerryApiError(
+            "Не удалось подключиться к серверу BookFerry"
+        ) from error
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as error:
+        raise BookFerryApiError(
+            f"Не удалось получить список библиотек: "
+            f"{_response_detail(response)}"
+        ) from error
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise BookFerryApiError(
+            "Сервер вернул некорректный список библиотек"
+        )
+
+    return data
+
+
+async def update_catalog(
+    telegram_id: int,
+    catalog_id: int,
+) -> dict:
+    return await _patch_user_setting(
+        telegram_id=telegram_id,
+        setting="catalog",
+        payload={
+            "catalog_id": catalog_id,
+        },
+    )
+
+
 async def update_opds(
     telegram_id: int,
     opds_url: str,
-) -> None:
-    await _patch_user_setting(
+) -> dict:
+    return await _patch_user_setting(
         telegram_id=telegram_id,
         setting="opds",
         payload={
@@ -57,8 +112,8 @@ async def update_opds(
 async def update_emails(
     telegram_id: int,
     emails: str,
-) -> None:
-    await _patch_user_setting(
+) -> dict:
+    return await _patch_user_setting(
         telegram_id=telegram_id,
         setting="emails",
         payload={
@@ -70,8 +125,8 @@ async def update_emails(
 async def update_subject(
     telegram_id: int,
     subject: str | None,
-) -> None:
-    await _patch_user_setting(
+) -> dict:
+    return await _patch_user_setting(
         telegram_id=telegram_id,
         setting="subject",
         payload={
@@ -84,7 +139,7 @@ async def _patch_user_setting(
     telegram_id: int,
     setting: str,
     payload: dict,
-) -> None:
+) -> dict:
     url = (
         f"{settings.api_base_url}"
         f"/users/telegram/{telegram_id}/{setting}"
@@ -92,7 +147,7 @@ async def _patch_user_setting(
 
     try:
         async with httpx.AsyncClient(
-            timeout=10.0
+            timeout=30.0
         ) as client:
             response = await client.patch(
                 url,
@@ -100,17 +155,20 @@ async def _patch_user_setting(
             )
     except httpx.RequestError as error:
         raise BookFerryApiError(
-            "Не удалось подключиться к серверу"
+            "Не удалось подключиться к серверу BookFerry"
         ) from error
 
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
         raise BookFerryApiError(
-            f"Сервер вернул ошибку "
-            f"{response.status_code}: "
-            f"{response.text}"
+            _response_detail(response)
         ) from error
+
+    if not response.content:
+        return {}
+
+    return response.json()
 
 
 async def search_books(
@@ -141,20 +199,16 @@ async def search_books(
 
     if response.status_code == 404:
         raise BookFerryApiError(
-            "Сначала выполните настройку: /setting"
+            "Сначала откройте Menu → «Мастер настройки»."
         )
 
     if response.is_error:
         raise BookFerryApiError(
-            f"Ошибка поиска: "
-            f"{response.status_code}\n"
-            f"{response.text}"
+            f"Не удалось выполнить поиск: {_response_detail(response)}"
         )
 
     data = response.json()
 
-    # Позволяет сначала обновить бот,
-    # а затем сервер.
     if isinstance(data, list):
         return {
             "books": data,
@@ -191,9 +245,7 @@ async def download_book(
 
     if response.is_error:
         raise BookFerryApiError(
-            f"Ошибка скачивания: "
-            f"{response.status_code}\n"
-            f"{response.text}"
+            f"Не удалось получить книгу: {_response_detail(response)}"
         )
 
     content_disposition = response.headers.get(
@@ -214,7 +266,7 @@ async def download_book(
 
     if not filename:
         raise BookFerryApiError(
-            "Не удалось прочитать имя файла"
+            "Не удалось определить имя файла"
         )
 
     return response.content, filename
