@@ -136,7 +136,11 @@ async def select_custom_opds(
         )
 
 
-@router.message(StateFilter(CatalogState.opds), F.text)
+@router.message(
+    StateFilter(CatalogState.opds),
+    F.text,
+    ~F.text.startswith("/"),
+)
 async def save_custom_opds(
     message: Message,
     state: FSMContext,
@@ -172,11 +176,4 @@ async def save_custom_opds(
     await status_message.edit_text(
         "✅ Пользовательский OPDS подключён.\n\n"
         "Теперь просто отправьте название или автора книги."
-    )
-
-
-@router.message(StateFilter(CatalogState.opds))
-async def invalid_custom_opds(message: Message) -> None:
-    await message.answer(
-        "Отправьте адрес OPDS-каталога обычным текстом."
     )
