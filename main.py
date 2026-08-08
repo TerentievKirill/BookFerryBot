@@ -13,6 +13,10 @@ from app.handlers.profile import router as profile_router
 from app.handlers.search import router as search_router
 from app.handlers.settings import router as settings_router
 from app.handlers.start import router as start_router
+from app.logging_config import (
+    TelegramLoggingMiddleware,
+    configure_logging,
+)
 
 
 async def configure_bot_menu(bot: Bot) -> None:
@@ -46,18 +50,16 @@ async def configure_bot_menu(bot: Bot) -> None:
 
 
 async def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format=(
-            "%(asctime)s | %(levelname)s | "
-            "%(name)s | %(message)s"
-        ),
-    )
+    configure_logging()
 
     bot = Bot(token=settings.bot_token)
 
     dispatcher = Dispatcher(
         storage=MemoryStorage(),
+    )
+
+    dispatcher.update.outer_middleware(
+        TelegramLoggingMiddleware()
     )
 
     dispatcher.include_router(start_router)
@@ -70,11 +72,16 @@ async def main() -> None:
 
     await configure_bot_menu(bot)
 
-    logging.info("BookFerry Bot запущен")
+    logging.getLogger("bookferry.bot").info(
+        "BOT_STARTED polling=true"
+    )
 
     try:
         await dispatcher.start_polling(bot)
     finally:
+        logging.getLogger("bookferry.bot").info(
+            "BOT_STOPPING"
+        )
         await bot.session.close()
 
 
@@ -82,4 +89,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("BookFerry Bot остановлен")
+        logging.getLogger("bookferry.bot").info(
+            "BOT_STOPPED reason=keyboard_interrupt"
+        )
