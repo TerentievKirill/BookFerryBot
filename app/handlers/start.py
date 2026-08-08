@@ -1,6 +1,6 @@
 import logging
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
@@ -44,7 +44,6 @@ async def handle_start(
         logger.exception(
             "Ошибка обращения к BookFerry Server"
         )
-
         await message.answer(
             f"Не удалось проверить настройки.\n\n{error}"
         )
@@ -53,22 +52,21 @@ async def handle_start(
     if profile is None:
         await message.answer(
             "Привет! Это BookFerry 📚\n\n"
-            "Я помогу найти книгу в OPDS-каталоге, скачать её в EPUB "
-            "и отправить:\n\n"
+            "Я помогу найти книгу, скачать её в EPUB и отправить:\n\n"
             "• прямо в Telegram;\n"
             "• на вашу электронную книгу по email.\n\n"
-            "Для начала настройте каталог и адрес электронной книги:\n\n"
-            "/setting\n\n"
-            "После настройки просто отправьте мне название книги.\n\n"
+            "Можно выбрать один из встроенных каталогов BookFerry "
+            "или подключить свой OPDS.\n\n"
+            "Для начала выполните /setting.\n\n"
+            "После настройки просто отправьте название книги.\n\n"
             "Ваши текущие настройки: /profile\n"
-            "Подробная инструкция: /help\n",
-            "Если вы используете PocketBook, после первой отправки на почту\n ",
-            "вашего аккаунта придёт письмо с подтверждением. Добавьте адрес \n",
-            "отправителя [адрес] в список доверенных отправителей \n",
-            "Send-to-PocketBook — после этого книги будут поступать\n ",
+            "Подробная инструкция: /help\n\n"
+            "Если вы используете PocketBook, после первой отправки "
+            "может прийти письмо с подтверждением. Добавьте адрес "
+            "отправителя BookFerry в список доверенных отправителей "
+            "Send-to-PocketBook — после этого книги будут поступать "
             "на устройство автоматически.",
-
-            reply_markup=ReplyKeyboardRemove(),
+            reply_markup=setup_keyboard,
         )
         return
 
