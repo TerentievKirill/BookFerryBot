@@ -6,3 +6,7 @@ class SettingsState(StatesGroup):
     opds = State()
     emails = State()
     subject = State()
+
+
+class CatalogState(StatesGroup):
+    opds = State()
