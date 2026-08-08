@@ -6,7 +6,7 @@ Telegram-интерфейс для BookFerry Server.
 
 1. Создать виртуальное окружение:
 
-   python -m venv .venv
+   python -m venv .venv 
 
 2. Активировать:
 
