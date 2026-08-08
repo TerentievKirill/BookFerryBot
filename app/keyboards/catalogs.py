@@ -6,6 +6,9 @@ from aiogram.types import (
 
 def build_catalogs_keyboard(
     catalogs: list[dict],
+    *,
+    callback_prefix: str = "settings_catalog",
+    custom_callback: str = "settings_custom_opds",
 ) -> InlineKeyboardMarkup:
     rows = []
 
@@ -14,7 +17,9 @@ def build_catalogs_keyboard(
             [
                 InlineKeyboardButton(
                     text=f"📚 {catalog['name']}",
-                    callback_data=f"settings_catalog:{catalog['id']}",
+                    callback_data=(
+                        f"{callback_prefix}:{catalog['id']}"
+                    ),
                 )
             ]
         )
@@ -23,7 +28,7 @@ def build_catalogs_keyboard(
         [
             InlineKeyboardButton(
                 text="➕ Другой OPDS",
-                callback_data="settings_custom_opds",
+                callback_data=custom_callback,
             )
         ]
     )
