@@ -13,11 +13,12 @@ from app.api_client import (
     update_opds,
 )
 from app.keyboards.catalogs import build_catalogs_keyboard
+from app.logging_config import current_request_id, log_event
 from app.states import CatalogState
 
 
 router = Router(name="catalog")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("bookferry.catalog")
 
 
 def _is_valid_opds_url(value: str) -> bool:
@@ -46,10 +47,21 @@ async def start_catalog_change(
 ) -> None:
     await state.clear()
 
+    log_event(
+        logger,
+        "CATALOG_MENU",
+        user=message.from_user,
+    )
+
     try:
         catalogs = await _available_catalogs()
     except BookFerryApiError as error:
-        logger.exception("Не удалось получить каталоги")
+        logger.exception(
+            "request_id=%s CATALOG_MENU_ERROR telegram_id=%s error=%s",
+            current_request_id(),
+            message.from_user.id if message.from_user else "-",
+            error,
+        )
         await message.answer(
             f"Не удалось получить список библиотек.\n\n{error}",
             reply_markup=ReplyKeyboardRemove(),
@@ -93,25 +105,49 @@ async def select_catalog(
     except (AttributeError, IndexError, ValueError):
         return
 
+    data = await state.get_data()
+    catalog_name = data.get("catalog_names", {}).get(
+        str(catalog_id),
+        "выбранную библиотеку",
+    )
+
+    log_event(
+        logger,
+        "CATALOG_CHANGE",
+        user=callback.from_user,
+        catalog_id=catalog_id,
+        catalog=catalog_name,
+    )
+
     try:
         await update_catalog(
             telegram_id=callback.from_user.id,
             catalog_id=catalog_id,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось сменить каталог")
+        logger.exception(
+            "request_id=%s CATALOG_CHANGE_ERROR telegram_id=%s catalog_id=%s error=%s",
+            current_request_id(),
+            callback.from_user.id,
+            catalog_id,
+            error,
+        )
         if callback.message:
             await callback.message.answer(
                 f"Не удалось сменить библиотеку.\n\n{error}"
             )
         return
 
-    data = await state.get_data()
-    catalog_name = data.get("catalog_names", {}).get(
-        str(catalog_id),
-        "выбранную библиотеку",
-    )
     await state.clear()
+
+    log_event(
+        logger,
+        "CATALOG_CHANGE_RESULT",
+        user=callback.from_user,
+        catalog_id=catalog_id,
+        catalog=catalog_name,
+        result="success",
+    )
 
     if callback.message:
         await callback.message.edit_text(
@@ -127,6 +163,12 @@ async def select_custom_opds(
 ) -> None:
     await callback.answer()
     await state.set_state(CatalogState.opds)
+
+    log_event(
+        logger,
+        "CUSTOM_OPDS_INPUT",
+        user=callback.from_user,
+    )
 
     if callback.message:
         await callback.message.edit_text(
@@ -158,6 +200,13 @@ async def save_custom_opds(
         )
         return
 
+    log_event(
+        logger,
+        "CUSTOM_OPDS_CHANGE",
+        user=user,
+        opds_url=opds_url,
+    )
+
     status_message = await message.answer("Проверяю OPDS-каталог…")
 
     try:
@@ -166,13 +215,28 @@ async def save_custom_opds(
             opds_url=opds_url,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось подключить пользовательский OPDS")
+        logger.exception(
+            "request_id=%s CUSTOM_OPDS_ERROR telegram_id=%s opds_url=%r error=%s",
+            current_request_id(),
+            user.id,
+            opds_url,
+            error,
+        )
         await status_message.edit_text(
             f"Не удалось подключить OPDS-каталог.\n\n{error}"
         )
         return
 
     await state.clear()
+
+    log_event(
+        logger,
+        "CUSTOM_OPDS_RESULT",
+        user=user,
+        opds_url=opds_url,
+        result="success",
+    )
+
     await status_message.edit_text(
         "✅ Пользовательский OPDS подключён.\n\n"
         "Теперь просто отправьте название или автора книги."
