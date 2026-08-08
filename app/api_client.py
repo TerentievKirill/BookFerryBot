@@ -1,8 +1,16 @@
+from __future__ import annotations
+
+import logging
+import time
 from email.message import Message as EmailMessage
 
 import httpx
 
 from app.config import settings
+from app.logging_config import current_request_id
+
+
+logger = logging.getLogger("bookferry.api_client")
 
 
 class BookFerryApiError(Exception):
@@ -21,19 +29,75 @@ def _response_detail(response: httpx.Response) -> str:
     return response.text.strip() or f"HTTP {response.status_code}"
 
 
-async def get_telegram_user(
-    telegram_id: int,
-) -> dict | None:
-    url = (
-        f"{settings.api_base_url}"
-        f"/users/telegram/{telegram_id}"
+def _request_headers() -> dict[str, str]:
+    request_id = current_request_id()
+    if request_id == "-":
+        return {}
+    return {"X-Request-ID": request_id}
+
+
+async def _request(
+    method: str,
+    path: str,
+    *,
+    timeout,
+    json: dict | None = None,
+) -> httpx.Response:
+    request_id = current_request_id()
+    started = time.perf_counter()
+
+    logger.info(
+        "request_id=%s API_CALL method=%s path=%s",
+        request_id,
+        method,
+        path,
     )
 
     try:
-        async with httpx.AsyncClient(
-            timeout=10.0
-        ) as client:
-            response = await client.get(url)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.request(
+                method,
+                f"{settings.api_base_url}{path}",
+                json=json,
+                headers=_request_headers(),
+            )
+    except httpx.RequestError:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        logger.exception(
+            "request_id=%s API_ERROR method=%s path=%s "
+            "duration_ms=%.1f",
+            request_id,
+            method,
+            path,
+            elapsed_ms,
+        )
+        raise
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    log_method = logger.warning if response.is_error else logger.info
+    log_method(
+        "request_id=%s API_RESULT method=%s path=%s status=%s "
+        "duration_ms=%.1f",
+        request_id,
+        method,
+        path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
+
+
+async def get_telegram_user(
+    telegram_id: int,
+) -> dict | None:
+    path = f"/users/telegram/{telegram_id}"
+
+    try:
+        response = await _request(
+            "GET",
+            path,
+            timeout=10.0,
+        )
     except httpx.RequestError as error:
         raise BookFerryApiError(
             "Не удалось подключиться к серверу BookFerry"
@@ -54,12 +118,11 @@ async def get_telegram_user(
 
 async def get_catalogs() -> list[dict]:
     try:
-        async with httpx.AsyncClient(
-            timeout=10.0
-        ) as client:
-            response = await client.get(
-                f"{settings.api_base_url}/catalogs"
-            )
+        response = await _request(
+            "GET",
+            "/catalogs",
+            timeout=10.0,
+        )
     except httpx.RequestError as error:
         raise BookFerryApiError(
             "Не удалось подключиться к серверу BookFerry"
@@ -140,19 +203,15 @@ async def _patch_user_setting(
     setting: str,
     payload: dict,
 ) -> dict:
-    url = (
-        f"{settings.api_base_url}"
-        f"/users/telegram/{telegram_id}/{setting}"
-    )
+    path = f"/users/telegram/{telegram_id}/{setting}"
 
     try:
-        async with httpx.AsyncClient(
-            timeout=30.0
-        ) as client:
-            response = await client.patch(
-                url,
-                json=payload,
-            )
+        response = await _request(
+            "PATCH",
+            path,
+            timeout=30.0,
+            json=payload,
+        )
     except httpx.RequestError as error:
         raise BookFerryApiError(
             "Не удалось подключиться к серверу BookFerry"
@@ -184,18 +243,17 @@ async def search_books(
     if page_url:
         payload["page_url"] = page_url
 
-    async with httpx.AsyncClient(
-        timeout=180
-    ) as client:
-        try:
-            response = await client.post(
-                f"{settings.api_base_url}/search",
-                json=payload,
-            )
-        except httpx.RequestError as error:
-            raise BookFerryApiError(
-                "Сервер BookFerry недоступен"
-            ) from error
+    try:
+        response = await _request(
+            "POST",
+            "/search",
+            timeout=180,
+            json=payload,
+        )
+    except httpx.RequestError as error:
+        raise BookFerryApiError(
+            "Сервер BookFerry недоступен"
+        ) from error
 
     if response.status_code == 404:
         raise BookFerryApiError(
@@ -227,21 +285,20 @@ async def download_book(
         connect=10,
     )
 
-    async with httpx.AsyncClient(
-        timeout=timeout
-    ) as client:
-        try:
-            response = await client.post(
-                f"{settings.api_base_url}/send-book",
-                json={
-                    "telegram_id": telegram_id,
-                    "url": url,
-                },
-            )
-        except httpx.RequestError as error:
-            raise BookFerryApiError(
-                "Сервер BookFerry недоступен"
-            ) from error
+    try:
+        response = await _request(
+            "POST",
+            "/send-book",
+            timeout=timeout,
+            json={
+                "telegram_id": telegram_id,
+                "url": url,
+            },
+        )
+    except httpx.RequestError as error:
+        raise BookFerryApiError(
+            "Сервер BookFerry недоступен"
+        ) from error
 
     if response.is_error:
         raise BookFerryApiError(
@@ -258,9 +315,7 @@ async def download_book(
         )
 
     header = EmailMessage()
-    header["content-disposition"] = (
-        content_disposition
-    )
+    header["content-disposition"] = content_disposition
 
     filename = header.get_filename()
 

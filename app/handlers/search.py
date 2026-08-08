@@ -14,13 +14,19 @@ from app.api_client import (
     download_book,
     search_books,
 )
-from app.keyboards.search import (
-    build_search_keyboard,
-)
+from app.keyboards.search import build_search_keyboard
+from app.logging_config import current_request_id, log_event
 
 
 router = Router(name="search")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("bookferry.search")
+
+
+def _book_sample(books: list[dict], limit: int = 5) -> str:
+    return " | ".join(
+        f"{book.get('title', '')} — {book.get('author', '')}".strip(" —")
+        for book in books[:limit]
+    )
 
 
 def build_page_text(
@@ -71,6 +77,14 @@ async def handle_search(
     if user is None:
         return
 
+    log_event(
+        logger,
+        "SEARCH",
+        user=user,
+        query=query,
+        page="first",
+    )
+
     status_message = await message.answer(
         f"🔎 Ищу: {query}"
     )
@@ -81,12 +95,28 @@ async def handle_search(
             query=query,
         )
     except BookFerryApiError as error:
-        logger.exception("Ошибка поиска")
+        logger.exception(
+            "request_id=%s SEARCH_ERROR telegram_id=%s query=%r error=%s",
+            current_request_id(),
+            user.id,
+            query,
+            error,
+        )
         await status_message.edit_text(str(error))
         return
 
     books = result["books"]
     next_page_url = result.get("next_page_url")
+
+    log_event(
+        logger,
+        "SEARCH_RESULT",
+        user=user,
+        query=query,
+        found=len(books),
+        has_more=next_page_url is not None,
+        sample=_book_sample(books),
+    )
 
     if not books:
         await status_message.edit_text(
@@ -146,6 +176,14 @@ async def handle_page(
     if page < 0:
         return
 
+    log_event(
+        logger,
+        "SEARCH_PAGE",
+        user=callback.from_user,
+        query=query,
+        page=page + 1,
+    )
+
     if page < len(pages):
         page_books = pages[page]
 
@@ -160,7 +198,12 @@ async def handle_page(
             )
         except BookFerryApiError as error:
             logger.exception(
-                "Ошибка загрузки следующей страницы"
+                "request_id=%s SEARCH_PAGE_ERROR telegram_id=%s query=%r page=%s error=%s",
+                current_request_id(),
+                callback.from_user.id,
+                query,
+                page + 1,
+                error,
             )
             await callback.message.answer(str(error))
             return
@@ -184,6 +227,17 @@ async def handle_page(
     has_more = (
         page < len(pages) - 1
         or next_page_url is not None
+    )
+
+    log_event(
+        logger,
+        "SEARCH_PAGE_RESULT",
+        user=callback.from_user,
+        query=query,
+        page=page + 1,
+        found=len(page_books),
+        has_more=has_more,
+        sample=_book_sample(page_books),
     )
 
     await state.update_data(
@@ -238,6 +292,15 @@ async def handle_book(
         )
         return
 
+    log_event(
+        logger,
+        "BOOK_SELECTED",
+        user=callback.from_user,
+        title=book.get("title"),
+        author=book.get("author"),
+        page=current_page + 1,
+    )
+
     try:
         file_content, filename = await download_book(
             telegram_id=callback.from_user.id,
@@ -245,7 +308,11 @@ async def handle_book(
         )
     except BookFerryApiError as error:
         logger.exception(
-            "Ошибка получения книги"
+            "request_id=%s BOOK_ERROR telegram_id=%s title=%r error=%s",
+            current_request_id(),
+            callback.from_user.id,
+            book.get("title"),
+            error,
         )
 
         await callback.bot.send_message(
@@ -266,4 +333,15 @@ async def handle_book(
             f"{book['title']} — {book['author']}\n\n"
             "✅ EPUB также отправлен на настроенные email."
         ),
+    )
+
+    log_event(
+        logger,
+        "BOOK_SENT",
+        user=callback.from_user,
+        title=book.get("title"),
+        author=book.get("author"),
+        filename=filename,
+        size_bytes=len(file_content),
+        result="success",
     )
