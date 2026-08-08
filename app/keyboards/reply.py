@@ -4,18 +4,6 @@ from aiogram.types import (
 )
 
 
-setup_keyboard = ReplyKeyboardMarkup(
-    keyboard=[
-        [
-            KeyboardButton(
-                text="⚙️ Настройки",
-            ),
-        ],
-    ],
-    resize_keyboard=True,
-)
-
-
 skip_subject_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
