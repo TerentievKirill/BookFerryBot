@@ -43,24 +43,27 @@ async def handle_profile(
     except BookFerryApiError as error:
         logger.exception("Не удалось получить профиль")
         await message.answer(
-            f"Не удалось получить настройки.\n\n{error}",
+            f"Не удалось получить профиль.\n\n{error}",
             reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     if profile is None:
         await message.answer(
-            "Настройки ещё не созданы.\n\n"
-            "Чтобы настроить бота, используйте /setting",
+            "Профиль ещё не настроен.\n\n"
+            "Откройте Menu → «Мастер настройки».",
             reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     opds_url = profile.get("opds_url") or "не настроен"
     emails = profile.get("emails") or "не настроен"
-    subject = profile.get("subject") or "не указана"
+    subject = profile.get("subject") or "по умолчанию"
 
-    catalog_text = f"OPDS: {opds_url}"
+    catalog_text = (
+        "Библиотека: Пользовательский OPDS\n"
+        f"OPDS: {opds_url}"
+    )
 
     try:
         catalogs = await get_catalogs()
@@ -79,18 +82,14 @@ async def handle_profile(
         )
 
         if builtin:
-            catalog_text = f"Каталог: {builtin['name']}"
-        else:
-            catalog_text = (
-                "Каталог: Пользовательский OPDS\n"
-                f"OPDS: {opds_url}"
-            )
+            catalog_text = f"Библиотека: {builtin['name']}"
 
     await message.answer(
-        "Ваши настройки:\n\n"
+        "👤 Профиль BookFerry\n\n"
         f"{catalog_text}\n"
         f"Email: {emails}\n"
         f"Тема письма: {subject}\n\n"
-        "Чтобы изменить настройки, используйте /setting",
+        "Изменить все параметры: Menu → «Мастер настройки».\n"
+        "Только сменить библиотеку: Menu → «Сменить каталог».",
         reply_markup=ReplyKeyboardRemove(),
     )
