@@ -9,7 +9,6 @@ from app.api_client import (
     BookFerryApiError,
     get_telegram_user,
 )
-from app.keyboards.reply import setup_keyboard
 
 
 router = Router(name="start")
@@ -45,41 +44,35 @@ async def handle_start(
             "Ошибка обращения к BookFerry Server"
         )
         await message.answer(
-            f"Не удалось проверить настройки.\n\n{error}"
+            f"Не удалось проверить настройки.\n\n{error}",
+            reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     if profile is None:
         await message.answer(
             "Привет! Это BookFerry 📚\n\n"
-            "Я помогу найти книгу, скачать её в EPUB и отправить:\n\n"
-            "• прямо в Telegram;\n"
-            "• на вашу электронную книгу по email.\n\n"
-            "Можно выбрать один из встроенных каталогов BookFerry "
-            "или подключить свой OPDS.\n\n"
-            "Для начала выполните /setting.\n\n"
-            "После настройки просто отправьте название книги.\n\n"
-            "Ваши текущие настройки: /profile\n"
-            "Подробная инструкция: /help\n\n"
-            "Если вы используете PocketBook, после первой отправки "
-            "может прийти письмо с подтверждением. Добавьте адрес "
-            "отправителя BookFerry в список доверенных отправителей "
-            "Send-to-PocketBook — после этого книги будут поступать "
-            "на устройство автоматически.",
-            reply_markup=setup_keyboard,
+            "Я помогу найти книгу, скачать EPUB и отправить его "
+            "прямо в Telegram и на электронную книгу по email.\n\n"
+            "Чтобы начать, откройте Menu рядом с полем ввода "
+            "и выберите «Мастер настройки».\n\n"
+            "После настройки просто отправьте название или автора книги.",
+            reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     if not profile.get("emails"):
         await message.answer(
             f"Привет, {user.first_name}! 👋\n\n"
-            "Настройка BookFerry ещё не завершена.",
-            reply_markup=setup_keyboard,
+            "Настройка BookFerry ещё не завершена.\n"
+            "Откройте Menu → «Мастер настройки».",
+            reply_markup=ReplyKeyboardRemove(),
         )
         return
 
     await message.answer(
         f"С возвращением, {user.first_name}! 👋\n\n"
-        "Просто отправьте название книги.",
+        "Просто отправьте название или автора книги.\n"
+        "Настройки и смена библиотеки доступны через Menu.",
         reply_markup=ReplyKeyboardRemove(),
     )
