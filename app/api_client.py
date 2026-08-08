@@ -41,11 +41,55 @@ async def get_telegram_user(
     return response.json()
 
 
+async def get_catalogs() -> list[dict]:
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0
+        ) as client:
+            response = await client.get(
+                f"{settings.api_base_url}/catalogs"
+            )
+    except httpx.RequestError as error:
+        raise BookFerryApiError(
+            "Не удалось подключиться к серверу"
+        ) from error
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as error:
+        raise BookFerryApiError(
+            f"Не удалось получить список каталогов: "
+            f"{response.status_code}"
+        ) from error
+
+    data = response.json()
+
+    if not isinstance(data, list):
+        raise BookFerryApiError(
+            "Сервер вернул некорректный список каталогов"
+        )
+
+    return data
+
+
+async def update_catalog(
+    telegram_id: int,
+    catalog_id: int,
+) -> dict:
+    return await _patch_user_setting(
+        telegram_id=telegram_id,
+        setting="catalog",
+        payload={
+            "catalog_id": catalog_id,
+        },
+    )
+
+
 async def update_opds(
     telegram_id: int,
     opds_url: str,
-) -> None:
-    await _patch_user_setting(
+) -> dict:
+    return await _patch_user_setting(
         telegram_id=telegram_id,
         setting="opds",
         payload={
@@ -57,8 +101,8 @@ async def update_opds(
 async def update_emails(
     telegram_id: int,
     emails: str,
-) -> None:
-    await _patch_user_setting(
+) -> dict:
+    return await _patch_user_setting(
         telegram_id=telegram_id,
         setting="emails",
         payload={
@@ -70,8 +114,8 @@ async def update_emails(
 async def update_subject(
     telegram_id: int,
     subject: str | None,
-) -> None:
-    await _patch_user_setting(
+) -> dict:
+    return await _patch_user_setting(
         telegram_id=telegram_id,
         setting="subject",
         payload={
@@ -84,7 +128,7 @@ async def _patch_user_setting(
     telegram_id: int,
     setting: str,
     payload: dict,
-) -> None:
+) -> dict:
     url = (
         f"{settings.api_base_url}"
         f"/users/telegram/{telegram_id}/{setting}"
@@ -92,7 +136,7 @@ async def _patch_user_setting(
 
     try:
         async with httpx.AsyncClient(
-            timeout=10.0
+            timeout=30.0
         ) as client:
             response = await client.patch(
                 url,
@@ -106,11 +150,23 @@ async def _patch_user_setting(
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as error:
+        detail = response.text
+        try:
+            payload_data = response.json()
+            detail = payload_data.get("detail", detail)
+        except ValueError:
+            pass
+
         raise BookFerryApiError(
             f"Сервер вернул ошибку "
             f"{response.status_code}: "
-            f"{response.text}"
+            f"{detail}"
         ) from error
+
+    if not response.content:
+        return {}
+
+    return response.json()
 
 
 async def search_books(
@@ -153,8 +209,6 @@ async def search_books(
 
     data = response.json()
 
-    # Позволяет сначала обновить бот,
-    # а затем сервер.
     if isinstance(data, list):
         return {
             "books": data,
