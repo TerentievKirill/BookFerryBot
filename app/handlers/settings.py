@@ -21,11 +21,12 @@ from app.api_client import (
 )
 from app.keyboards.catalogs import build_catalogs_keyboard
 from app.keyboards.reply import skip_subject_keyboard
+from app.logging_config import current_request_id, log_event
 from app.states import SettingsState
 
 
 router = Router(name="settings")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("bookferry.settings")
 
 MAX_EMAILS = 5
 MAX_SUBJECT_LENGTH = 200
@@ -95,6 +96,12 @@ async def start_settings(
 ) -> None:
     await state.clear()
 
+    log_event(
+        logger,
+        "SETTINGS_START",
+        user=message.from_user,
+    )
+
     try:
         catalogs = [
             catalog
@@ -102,7 +109,12 @@ async def start_settings(
             if catalog.get("enabled", True)
         ]
     except BookFerryApiError as error:
-        logger.exception("Не удалось получить каталоги")
+        logger.exception(
+            "request_id=%s SETTINGS_START_ERROR telegram_id=%s error=%s",
+            current_request_id(),
+            message.from_user.id if message.from_user else "-",
+            error,
+        )
         await message.answer(
             f"Не удалось получить список библиотек.\n\n{error}",
             reply_markup=ReplyKeyboardRemove(),
@@ -148,24 +160,38 @@ async def process_catalog(
     except (AttributeError, IndexError, ValueError):
         return
 
+    data = await state.get_data()
+    catalog_name = data.get("catalog_names", {}).get(
+        str(catalog_id),
+        "выбранная библиотека",
+    )
+
+    log_event(
+        logger,
+        "SETTINGS_CATALOG",
+        user=callback.from_user,
+        catalog_id=catalog_id,
+        catalog=catalog_name,
+    )
+
     try:
         await update_catalog(
             telegram_id=callback.from_user.id,
             catalog_id=catalog_id,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось сохранить каталог")
+        logger.exception(
+            "request_id=%s SETTINGS_CATALOG_ERROR telegram_id=%s catalog_id=%s error=%s",
+            current_request_id(),
+            callback.from_user.id,
+            catalog_id,
+            error,
+        )
         if callback.message:
             await callback.message.answer(
                 f"Не удалось сохранить библиотеку.\n\n{error}"
             )
         return
-
-    data = await state.get_data()
-    catalog_name = data.get("catalog_names", {}).get(
-        str(catalog_id),
-        "выбранная библиотека",
-    )
 
     await state.set_state(SettingsState.emails)
 
@@ -186,6 +212,12 @@ async def process_custom_catalog(
 ) -> None:
     await callback.answer()
     await state.set_state(SettingsState.opds)
+
+    log_event(
+        logger,
+        "SETTINGS_CUSTOM_OPDS_INPUT",
+        user=callback.from_user,
+    )
 
     if callback.message:
         await callback.message.edit_text(
@@ -224,6 +256,13 @@ async def process_opds(
         )
         return
 
+    log_event(
+        logger,
+        "SETTINGS_CUSTOM_OPDS",
+        user=user,
+        opds_url=opds_url,
+    )
+
     status_message = await message.answer(
         "Проверяю OPDS-каталог…"
     )
@@ -234,7 +273,13 @@ async def process_opds(
             opds_url=opds_url,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось сохранить OPDS")
+        logger.exception(
+            "request_id=%s SETTINGS_CUSTOM_OPDS_ERROR telegram_id=%s opds_url=%r error=%s",
+            current_request_id(),
+            user.id,
+            opds_url,
+            error,
+        )
         await status_message.edit_text(
             f"Не удалось подключить OPDS-каталог.\n\n{error}"
         )
@@ -277,13 +322,30 @@ async def process_emails(
         await message.answer(validation_error)
         return
 
+    email_count = len(
+        [item for item in emails.split(",") if item.strip()]
+    )
+
+    log_event(
+        logger,
+        "SETTINGS_EMAILS",
+        user=user,
+        email_count=email_count,
+    )
+
     try:
         await update_emails(
             telegram_id=user.id,
             emails=emails,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось сохранить email")
+        logger.exception(
+            "request_id=%s SETTINGS_EMAILS_ERROR telegram_id=%s email_count=%s error=%s",
+            current_request_id(),
+            user.id,
+            email_count,
+            error,
+        )
         await message.answer(
             f"Не удалось сохранить email.\n\n{error}"
         )
@@ -313,6 +375,12 @@ async def _finish_settings(
     message: Message,
     state: FSMContext,
 ) -> None:
+    log_event(
+        logger,
+        "SETTINGS_COMPLETE",
+        user=message.from_user,
+        result="success",
+    )
     await state.clear()
     await message.answer(
         "✅ Настройка завершена.\n\n"
@@ -338,13 +406,25 @@ async def skip_subject(
         )
         return
 
+    log_event(
+        logger,
+        "SETTINGS_SUBJECT",
+        user=user,
+        action="cleared",
+    )
+
     try:
         await update_subject(
             telegram_id=user.id,
             subject=None,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось очистить тему письма")
+        logger.exception(
+            "request_id=%s SETTINGS_SUBJECT_ERROR telegram_id=%s action=cleared error=%s",
+            current_request_id(),
+            user.id,
+            error,
+        )
         await message.answer(
             f"Не удалось сохранить настройки.\n\n{error}"
         )
@@ -374,13 +454,26 @@ async def process_subject(
         )
         return
 
+    log_event(
+        logger,
+        "SETTINGS_SUBJECT",
+        user=user,
+        action="set" if subject else "cleared",
+    )
+
     try:
         await update_subject(
             telegram_id=user.id,
             subject=subject or None,
         )
     except BookFerryApiError as error:
-        logger.exception("Не удалось сохранить тему письма")
+        logger.exception(
+            "request_id=%s SETTINGS_SUBJECT_ERROR telegram_id=%s action=%s error=%s",
+            current_request_id(),
+            user.id,
+            "set" if subject else "cleared",
+            error,
+        )
         await message.answer(
             f"Не удалось сохранить тему.\n\n{error}"
         )
