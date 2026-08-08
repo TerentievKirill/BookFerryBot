@@ -15,14 +15,16 @@ async def handle_about(
     await state.clear()
 
     await message.answer(
-        "📚 BookFerry\n\n"
-        "Бот для поиска книг в OPDS-каталогах и отправки "
-        "на электронные книги.\n\n"
-        "Формат книг: EPUB\n"
+        "ℹ️ BookFerry\n\n"
+        "BookFerry помогает искать электронные книги и доставлять EPUB "
+        "в Telegram и на электронную книгу по email.\n\n"
+        "Для встроенных библиотек поиск выполняется по быстрому локальному "
+        "индексу. При желании можно подключить собственный OPDS-каталог.\n\n"
+        "Сами книги BookFerry постоянно не хранит: EPUB скачивается у "
+        "источника только после выбора книги.\n\n"
+        "Формат: EPUB\n"
         "Версия: 1.0\n\n"
         "Автор: Кирилл Т\n"
-        "Email: kirillterentiev@gmail.com\n\n"
-        "Проект создан для удобной отправки книг "
-        "на PocketBook и другие устройства.",
+        "Email: kirillterentiev@gmail.com",
         reply_markup=ReplyKeyboardRemove(),
     )
