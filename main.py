@@ -20,7 +20,7 @@ async def configure_bot_menu(bot: Bot) -> None:
         [
             BotCommand(
                 command="settings",
-                description="Мастер настройки",
+                description="Мастер Настройки",
             ),
             BotCommand(
                 command="catalog",
