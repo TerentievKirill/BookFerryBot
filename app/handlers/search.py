@@ -265,6 +265,11 @@ async def handle_book(
         "Скачиваю EPUB…"
     )
 
+    if callback.message is not None:
+        await callback.message.edit_reply_markup(
+            reply_markup=None,
+        )
+
     data = await state.get_data()
 
     pages = data.get("pages")
