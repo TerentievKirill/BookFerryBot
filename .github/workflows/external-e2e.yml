@@ -1,0 +1,33 @@
+name: External E2E
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  external-e2e:
+    runs-on: ubuntu-latest
+
+    env:
+      BOT_TOKEN: test-token
+      API_BASE_URL: https://api.heartlab.app
+      TEST_TELEGRAM_ID: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run external E2E
+        run: pytest tests/test_external_e2e.py -v -s -m e2e
