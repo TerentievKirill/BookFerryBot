@@ -16,7 +16,7 @@ CATALOG_CASES = [
         id="gutenberg",
     ),
     pytest.param(
-        2,
+        20,
         "anarchism other essays",
         "Anarchism and Other Essays",
         id="anarchist",
@@ -28,7 +28,7 @@ CATALOG_CASES = [
         id="flibusta",
     ),
     pytest.param(
-        4,
+        28,
         "государственность анархия",
         "Государственность и анархия",
         id="anarchist-ru",
