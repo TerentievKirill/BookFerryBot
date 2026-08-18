@@ -87,6 +87,8 @@ async def _run_book_flow(
 
 
 @pytest.mark.e2e
+@allure.parent_suite("BookFerry")
+@allure.suite("External E2E")
 @allure.title("Bot can find and download book: {expected_title}")
 @pytest.mark.parametrize(
     "catalog_id,query,expected_title",
